@@ -21,10 +21,22 @@ url_validator = re.compile(
 def is_valid_url(url: str):
     return url_validator.match(url) is not None
 
-def jira_login(args, stdin=None, stdout=None):
-    if not JiraInstalled:
-        return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
+def validate_jira_installed(func):
+    def wrapped(*args, **kwargs):
+        if not JiraInstalled:
+            return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
+        return func(*args, **kwargs)
+    return wrapped
 
+def validate_jira_instance(func):
+    def wrapped(*args, **kwargs):
+        if not JiraInstance:
+            return '', 'Please login to Jira first using "jiralogin"\n'
+        return func(*args, **kwargs)
+    return wrapped
+
+@validate_jira_installed
+def jira_login(args, stdin=None, stdout=None):
     global JiraInstance
     username = None
     try:
@@ -58,12 +70,9 @@ def jira_login(args, stdin=None, stdout=None):
     except:
         return '', "Failed to log in to %s as %s\n" % (url, username)
 
+@validate_jira_installed
+@validate_jira_instance
 def jira_issue(args):
-    if not JiraInstalled:
-        return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
-
-    if not JiraInstance:
-        return '', 'Please login to Jira first using "jiralogin"\n'
     return '\n'.join(jira_format_issue(JiraInstance.issue(args[0]))) + '\n\n'
 
 def jira_format_issue(issue):
@@ -84,12 +93,9 @@ def jira_format_issue(issue):
                      owner=owner,
                      link=link) for x in template]
 
+@validate_jira_installed
+@validate_jira_instance
 def jira_subtasks(args):
-    if not JiraInstalled:
-        return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
-
-    if not JiraInstance:
-        return '', 'Please login to Jira first using "jiralogin"\n'
     issue = JiraInstance.issue(args[0])
     subtask_lines = map(jira_format_issue, issue.fields.subtasks)
     return format_list(subtask_lines) + '\n'
@@ -106,12 +112,9 @@ def format_list(list_):
         output.append('')
     return '\n'.join(output)
 
+@validate_jira_installed
+@validate_jira_instance
 def jira_links(args):
-    if not JiraInstalled:
-        return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
-
-    if not JiraInstance:
-        return '', 'Please login to Jira first using "jiralogin"\n'
     issue = JiraInstance.issue(args[0])
     web_links = JiraInstance.remote_links(args[0])
     links = (list(map(jira_format_link, issue.fields.issuelinks)) +
