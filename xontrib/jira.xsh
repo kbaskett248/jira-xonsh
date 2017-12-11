@@ -24,7 +24,7 @@ def is_valid_url(url: str):
 def jira_login(args, stdin=None, stdout=None):
     if not JiraInstalled:
         return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
-    
+
     global JiraInstance
     username = None
     try:
@@ -61,10 +61,10 @@ def jira_login(args, stdin=None, stdout=None):
 def jira_issue(args):
     if not JiraInstalled:
         return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
-    
+
     if not JiraInstance:
         return '', 'Please login to Jira first using "jiralogin"\n'
-    return jira_format_issue(JiraInstance.issue(args[0]))
+    return '\n'.join(jira_format_issue(JiraInstance.issue(args[0]))) + '\n\n'
 
 def jira_format_issue(issue):
     try:
@@ -74,43 +74,63 @@ def jira_format_issue(issue):
     link = '{server}/browse/{key}'.format(
         server=JiraInstance.server_info()['baseUrl'],
         key=issue.key)
-    return '{key}     {type}     {status}     {owner}\n      {summary}\n      {link}\n'.format(
-        key=issue.key,
-        summary=issue.fields.summary,
-        type=issue.fields.issuetype,
-        status=issue.fields.status,
-        owner=owner,
-        link=link)
+    template = ('{key}     {type}     {status}     {owner}',
+                '{summary}',
+                '{link}')
+    return [x.format(key=issue.key,
+                     summary=issue.fields.summary,
+                     type=issue.fields.issuetype,
+                     status=issue.fields.status,
+                     owner=owner,
+                     link=link) for x in template]
 
 def jira_subtasks(args):
     if not JiraInstalled:
         return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
-    
+
     if not JiraInstance:
         return '', 'Please login to Jira first using "jiralogin"\n'
     issue = JiraInstance.issue(args[0])
-    return '\n'.join(map(jira_format_issue, issue.fields.subtasks))
+    subtask_lines = map(jira_format_issue, issue.fields.subtasks)
+    return format_list(subtask_lines) + '\n'
+
+def format_list(list_):
+    output = []
+    for index, item in enumerate(list_, start=1):
+        for index2, line in enumerate(item):
+            if index2 == 0:
+                output.append('{index})    {line}'.format(index=index,
+                                                          line=line))
+            else:
+                output.append('      {line}'.format(line=line))
+        output.append('')
+    return '\n'.join(output)
 
 def jira_links(args):
     if not JiraInstalled:
         return '', 'jira not installed. \nRun pip install jira to satisfy dependency.'
-    
+
     if not JiraInstance:
         return '', 'Please login to Jira first using "jiralogin"\n'
     issue = JiraInstance.issue(args[0])
-    return '\n'.join(map(jira_format_link, issue.fields.issuelinks))
-    for l in issue.fields.issuelinks:
-        try:
-            print(l.inwardIssue)
-        except Exception as e:
-            print(e)
+    web_links = JiraInstance.remote_links(args[0])
+    links = (list(map(jira_format_link, issue.fields.issuelinks)) +
+             list(map(jira_format_web_link, web_links)))
+    return format_list(links) + '\n'
 
 def jira_format_link(link):
     try:
-        return link.type.inward + '    ' + jira_format_issue(link.inwardIssue)
+        prefix = link.type.inward
+        lines = jira_format_issue(link.inwardIssue)
     except Exception:
-        return link.type.outward + '    ' + jira_format_issue(link.outwardIssue)
-    return jira_format_issue(link.inwardIssue)
+        prefix = link.type.outward
+        lines = jira_format_issue(link.outwardIssue)
+    lines[0] = prefix + '    ' + lines[0]
+    return lines
+
+def jira_format_web_link(link):
+    return ['{name}    {url}'.format(name=link.object.title,
+                                     url=link.object.url)]
 
 aliases['jiralogin'] = jira_login
 aliases['jlo'] = jira_login
