@@ -97,8 +97,12 @@ def jira_format_issue(issue):
 @validate_jira_instance
 def jira_subtasks(args, stdin=None, stdout=None):
     issue = JiraInstance.issue(args[0])
-    subtask_lines = map(jira_format_issue, issue.fields.subtasks)
-    return format_list(subtask_lines) + '\n'
+    subtask_lines = list(map(jira_format_issue, issue.fields.subtasks))
+    if subtask_lines:
+        return format_list(subtask_lines) + '\n'
+    else:
+        results = ['No subtasks for issue:'] + jira_format_issue(issue)
+        return '\n'.join(results) + '\n\n'
 
 def format_list(list_):
     output = []
